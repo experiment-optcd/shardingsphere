@@ -29,19 +29,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-    - uses: actions/checkout@v4
-    - uses: dorny/paths-filter@v3
-      id: filter
-      with:
-        token: ${{ github.token }}
-        filters: .github/workflows/resources/filter/operation-filters.yml
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          token: ${{ github.token }}
+          filters: .github/workflows/resources/filter/operation-filters.yml
     outputs:
       changed_operations: ${{ steps.filter.outputs.changes }}
   e2e-operation:
     name: e2e-operation (${{ matrix.operation }}, ${{ matrix.image }})
     needs:
-    - detect-changed-files
-    - global-environment
+      - detect-changed-files
+      - global-environment
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -49,70 +49,75 @@ jobs:
       fail-fast: false
       matrix:
         operation:
-        - transaction
-        - pipeline
-        - showprocesslist
+          - transaction
+          - pipeline
+          - showprocesslist
         image:
-        - type: it.docker.mysql.version
-          version: mysql:5.7
-        - type: it.docker.postgresql.version
-          version: postgres:12-alpine
-        - type: it.docker.mariadb.version
-          version: mariadb:11
-        exclude:
-        - operation: transaction
-          image:
-            type: it.docker.mariadb.version
-            version: mariadb:11
-        - operation: showprocesslist
-          image:
-            type: it.docker.postgresql.version
+          - type: it.docker.mysql.version
+            version: mysql:5.7
+          - type: it.docker.postgresql.version
             version: postgres:12-alpine
-        - operation: showprocesslist
-          image:
-            type: it.docker.mariadb.version
+          - type: it.docker.mariadb.version
             version: mariadb:11
+        exclude:
+          - operation: transaction
+            image:
+              type: it.docker.mariadb.version
+              version: mariadb:11
+          - operation: showprocesslist
+            image:
+              type: it.docker.postgresql.version
+              version: postgres:12-alpine
+          - operation: showprocesslist
+            image:
+              type: it.docker.mariadb.version
+              version: mariadb:11
     steps:
-    - env:
-        changed_operations: ${{ needs.detect-changed-files.outputs.changed_operations
-          }}
-        current_operation: ${{ matrix.operation }}
-      name: Check if ${{ matrix.operation }} is Changed
-      run: |-
-        echo "skip_current_step=false" >> $GITHUB_ENV
-        if [[ ${changed_operations} == '["ignore"]' ]]; then
-          echo "${current_operation} is ignored by ignore filter"
-          echo "skip_current_step=true" >> $GITHUB_ENV
-        fi
-
-        if [[ ${changed_operations} == *""$current_operation""* ]]; then
-          echo "${current_operation} is detected by changed filter"
-          else
-            echo "${current_operation} is ignore by filter"
+      - env:
+          changed_operations: ${{ needs.detect-changed-files.outputs.changed_operations
+            }}
+          current_operation: ${{ matrix.operation }}
+        name: Check if ${{ matrix.operation }} is Changed
+        run: |-
+          echo "skip_current_step=false" >> $GITHUB_ENV
+          if [[ ${changed_operations} == '["ignore"]' ]]; then
+            echo "${current_operation} is ignored by ignore filter"
             echo "skip_current_step=true" >> $GITHUB_ENV
-        fi
-    - name: Checkout Project
-      uses: actions/checkout@v4
-    - name: Retrieve Maven Caches
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-e2e-cache-${{
-          github.sha }}
-        restore-keys: |-
-          ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-e2e-cache-
-          ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-
-    - uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 11
-    - name: Build ${{ matrix.operation }} E2E Image
-      run: ./mvnw -B clean install -am -pl test/e2e/operation/${{ matrix.operation
-        }} -Pit.env.docker -DskipTests
-    - name: Run ${{ matrix.operation }} on ${{ matrix.image.version }}
-      run: ./mvnw -nsu -B install -f test/e2e/operation/${{ matrix.operation }}/pom.xml
-        -D${{ matrix.operation }}.it.env.type=docker -D${{ matrix.operation }}.${{
-        matrix.image.type }}=${{ matrix.image.version }}
+          fi
+
+          if [[ ${changed_operations} == *""$current_operation""* ]]; then
+            echo "${current_operation} is detected by changed filter"
+            else
+              echo "${current_operation} is ignore by filter"
+              echo "skip_current_step=true" >> $GITHUB_ENV
+          fi
+      - name: Checkout Project
+        uses: actions/checkout@v4
+      - name: Retrieve Maven Caches
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-e2e-cache-${{
+            github.sha }}
+          restore-keys: |-
+            ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-e2e-cache-
+            ${{ needs.global-environment.outputs.GLOBAL_CACHE_PREFIX }}-maven-third-party-
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+      - name: Build ${{ matrix.operation }} E2E Image
+        run: ./mvnw -B clean install -am -pl test/e2e/operation/${{ matrix.operation
+          }} -Pit.env.docker -DskipTests "-Dmaven.test.skip=true" "-DskipTests=false"
+          "-Dmaven.test.skip=false" "-Dmaven.javadoc.skip=true" "-Dmaven.resources.skip=true"
+          "-DskipITs" "-Dmaven.remote-resources.skip=true" "-Dremote-resources.skip=true"
+          "-Dmaven.compiler.failOnError=false" "-Dmaven.surefire.skip=true" "-Dskip.resources=true"
+          "-Dskip.global.clock.tso.resources=true" "-Dmaven.do.not.create.maven.status=true"
+          "-Dskip.target.directory" "-Dskip.remote.resources=true"
+      - name: Run ${{ matrix.operation }} on ${{ matrix.image.version }}
+        run: ./mvnw -nsu -B install -f test/e2e/operation/${{ matrix.operation }}/pom.xml
+          -D${{ matrix.operation }}.it.env.type=docker -D${{ matrix.operation }}.${{
+          matrix.image.type }}=${{ matrix.image.version }}
 'on':
-- push
-- workflow_dispatch
+  - push
+  - workflow_dispatch
